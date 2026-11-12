@@ -1,0 +1,57 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  publish-release:
+    name: Build & Publish Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish Self-Contained Single-File (win-x64)
+        run: >
+          dotnet publish src/ClipboardImageDrop/ClipboardImageDrop.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:EnableCompressionInSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o dist/win-x64
+
+      - name: Create Zip Archive
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/win-x64/* -DestinationPath dist/ClipboardImageDrop-win-x64.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name || inputs.tag_name }}
+          tag_name: ${{ github.ref_name || inputs.tag_name }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          files: |
+            dist/ClipboardImageDrop-win-x64.zip
+            dist/win-x64/ClipboardImageDrop.exe
